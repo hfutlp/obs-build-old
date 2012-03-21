@@ -437,7 +437,7 @@ sub extract_crossdeps {
 # cross dependencies match somthing like this: package(whatever)
 sub drop_crossdeps {
   my (@deps) = @_;
-  @deps = grep {!/^.*\(.*\)$/} @deps;
+  @deps = grep {!/^.*\[.*\]$/} @deps;
   return @deps;
 }
 
