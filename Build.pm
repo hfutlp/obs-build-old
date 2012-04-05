@@ -214,6 +214,8 @@ sub read_config {
   $config->{'noprefer'} = [];
   $config->{'noignore'} = [];
   $config->{'noconflict'} = [];
+  # array with package that will get cross substituted
+  $config->{'crosssubst'} = [];
 
   for my $l (@spec) {
     $l = $l->[1] if ref $l;
@@ -252,6 +254,10 @@ sub read_config {
 	delete $config->{'substitute'}->{$1};
       } else {
 	$config->{'substitute'}->{$ll} = [ @l ];
+        if (grep { /^.*\[.*\].*$/ } @l)
+        {
+          push @{$config->{'crosssubst'}}, $l[0];
+        }
       }
     } elsif ($l0 eq 'fileprovides:') {
       next unless @l;
@@ -542,6 +548,10 @@ sub get_targetsysroot {
   return $config->{'targetsysroot'};
 }
 
+sub get_crosssubst {
+  my ($config) = @_;
+  return $config->{'crosssubst'};
+}
 
 ###########################################################################
 
