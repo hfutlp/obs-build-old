@@ -1728,7 +1728,7 @@ for SPECFILE in "${SPECFILES[@]}" ; do
 			KVM_OPTIONS=""
 		fi
 		if [ "$VM_TYPE" = 'kvm' ]; then
-			KVM_OPTIONS="$KVM_OPTIONS -cpu host"
+			KVM_OPTIONS="$KVM_OPTIONS"
 		fi
 
 		set -- $qemu_bin -no-reboot -nographic -net none $KVM_OPTIONS \
