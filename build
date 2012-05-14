@@ -1420,6 +1420,10 @@ setmemorylimit
 #
 test -z "$HOST" && HOST=`hostname`
 
+if test -n "$CROSSBUILD" -a -z "$ABUILD_TARGET"; then
+    ABUILD_TARGET="$BUILD_ARCH"
+fi
+
 if [ -z "$RUNNING_IN_VM" ]; then
     echo Using BUILD_ROOT=$BUILD_ROOT
     test -n "$BUILD_RPMS" && echo Using BUILD_RPMS=$BUILD_RPMS
@@ -2027,9 +2031,7 @@ for SPECFILE in "${SPECFILES[@]}" ; do
 	# extract optflags from configuration
 	getoptflags --dist "$BUILD_DIST" --configdir "$BUILD_DIR/configs" --archpath "$BUILD_ARCH" ${BUILD_DEBUG:+--debug} > $BUILD_ROOT/root/.rpmrc
 	test $BUILD_USER = abuild && cp -p $BUILD_ROOT/root/.rpmrc $BUILD_ROOT/home/abuild/.rpmrc
-	if test -n "$CROSSBUILD" -a -z "$ABUILD_TARGET"; then
-	    ABUILD_TARGET="$BUILD_ARCH"
-	elif test -z "$ABUILD_TARGET"; then
+	if test -z "$ABUILD_TARGET"; then
 	    ABUILD_TARGET=$(getchangetarget --dist "$BUILD_DIST" --configdir "$BUILD_DIR/configs" --archpath "$BUILD_ARCH" )
 	    test -z "$ABUILD_TARGET" || echo "build target is $ABUILD_TARGET"
 	fi
