@@ -741,12 +741,16 @@ setup_sys_root()
 		test -n "$SYSROOT_RPMS" || continue
 
 		mkdir -p $BUILD_ROOT/$SYSROOT_PATH || fail_exit
-
+		
 		if [ x$1 = xprepare ]; then
-			BUILD_ROOT=$BUILD_ROOT/$SYSROOT_PATH CROSSBUILD=1 init_buildsystem --cachedir "$CACHE_DIR" --prepare "${definesnstuff[@]}" "${repos[@]}" $CLEAN_BUILD $USEUSEDFORBUILD --rpmlist $SYSROOT_RPMS "$MYSRCDIR/$SPECFILE"
+			BUILD_ROOT=$BUILD_ROOT/$SYSROOT_PATH CROSSBUILD=$CROSSBUILD init_buildsystem --cachedir "$CACHE_DIR" --prepare "${definesnstuff[@]}" "${repos[@]}" $CLEAN_BUILD $USEUSEDFORBUILD --rpmlist $SYSROOT_RPMS "$MYSRCDIR/$SPECFILE"
 			ERR=$?
 		else
-			BUILD_ROOT=$BUILD_ROOT/$SYSROOT_PATH CROSSBUILD=1 init_buildsystem --rpmlist $SYSROOT_RPMS "$MYSRCDIR/$SPECFILE"
+			if [ x$CROSSBUILD = xsb2 ]; then
+				# If we're setting up SB2, set up the target
+				chroot $BUILD_ROOT su -c "cd $SYSROOT_PATH; /usr/bin/sb2-init -C --sysroot=/ -L --sysroot=/ -m obs-rpm-build -c /usr/bin/qemu-arm-dynamic -n -N -t / obsbuild /opt/cross/bin/armv7l-meego-linux-gnueabi-gcc" $BUILD_USER
+			fi
+			BUILD_ROOT=$BUILD_ROOT/$SYSROOT_PATH CROSSBUILD=$CROSSBUILD init_buildsystem --rpmlist $SYSROOT_RPMS "$MYSRCDIR/$SPECFILE"
 			ERR=$?
 		fi
     		#TODO: make proper error handling
@@ -1151,6 +1155,10 @@ BUILD_SB2FLAGS=`getsb2flags --dist "$BUILD_DIST" --configdir "$BUILD_DIR/configs
 if [ -n "$BUILD_SB2FLAGS" -a -z "$VM_TYPE" ]; then
 	echo "Cannot do SB2 with chroot, switching to vm type sb2"
 	VM_TYPE="sb2"
+fi
+
+if [ -n "$BUILD_SB2FLAGS" ]; then
+	CROSSBUILD=sb2
 fi
 
 if test "$VM_TYPE" = "lxc" -o "$VM_TYPE" = "sb2"; then
@@ -1853,8 +1861,6 @@ for SPECFILE in "${SPECFILES[@]}" ; do
 	read BUILD_DIST < $BUILD_ROOT/.guessed_dist
     fi
 
-    # setup sys-root environment for cross compiling builds
-    setup_sys_root
 
     #
     # fix rpmrc if we are compiling for i686
@@ -1938,6 +1944,10 @@ for SPECFILE in "${SPECFILES[@]}" ; do
 	    fi
 	fi
     fi
+
+    # setup sys-root environment for cross compiling builds
+    setup_sys_root
+
 
     if test "$BUILDTYPE" = spec ; then
 	if [ -n "$CROSSBUILD" ]; then
