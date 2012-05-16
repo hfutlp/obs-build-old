@@ -44,7 +44,7 @@ kvm_virtio=
 console=ttyS0
 
 # need to restore build root owner for non-root builds
-browner=0
+browner=
 
 # Default uid:gid for the build user
 ABUILD_UID=399
@@ -54,6 +54,7 @@ DO_INIT=true
 DO_LINT=
 DO_CHECKS=true
 CLEAN_BUILD=
+USE_SYSTEM_QEMU=
 SPECFILES=()
 SRCDIR=
 BUILD_JOBS=
@@ -317,7 +318,7 @@ cleanup_and_exit () {
         fi
     fi
     if test -n "$RUNNING_IN_VM" ; then
-	chown $browner $BUILD_ROOT
+	test -n "$browner" && chown "$browner" $BUILD_ROOT
 	cd /
 	if test -n "$VM_SWAP" -a -e "$VM_SWAP" ; then
 	    swapoff "$VM_SWAP" 2>/dev/null
@@ -490,6 +491,7 @@ setmemorylimit()
 create_baselibs()
 {
     local pkgs=()
+    local line
 
     BASELIBS_CFG=
 
@@ -548,7 +550,10 @@ create_baselibs()
 	fi
     fi
     echo "... creating baselibs$whichone"
-    chroot $BUILD_ROOT su -c "$mkbaselibs $BASELIBS_GLOBAL $BASELIBS_CFG ${pkgs[*]#$BUILD_ROOT}" - $BUILD_USER || cleanup_and_exit 1
+    while read line
+    do
+	chroot $BUILD_ROOT su -c "$mkbaselibs $BASELIBS_GLOBAL $BASELIBS_CFG $line" - $BUILD_USER || cleanup_and_exit 1
+    done < <(IFS=$'\n'; echo "${pkgs[*]#$BUILD_ROOT}" | xargs -n 1024)
     rm -rf $BUILD_ROOT/.mkbaselibs
 }
 
@@ -905,6 +910,9 @@ while test -n "$1"; do
       *-baselibs-internal)
 	CREATE_BASELIBS=internal
 	;;
+      *-use-system-qemu)
+	USE_SYSTEM_QEMU=true
+      ;;
       *-root)
 	needarg
 	BUILD_ROOT="$ARG"
@@ -1530,7 +1538,7 @@ for SPECFILE in "${SPECFILES[@]}" ; do
 	if test "$DO_INIT" = true ; then
 	    # do fist stage of init_buildsystem
 	    rm -f $BUILD_ROOT/.build.success
-	    set -- init_buildsystem --cachedir "$CACHE_DIR" --prepare "${definesnstuff[@]}" "${repos[@]}" $CLEAN_BUILD $USEUSEDFORBUILD $RPMLIST "$MYSRCDIR/$SPECFILE" $ADDITIONAL_PACKS
+	    set -- init_buildsystem --cachedir "$CACHE_DIR" --prepare "${definesnstuff[@]}" "${repos[@]}" $CLEAN_BUILD $USE_SYSTEM_QEMU $USEUSEDFORBUILD $RPMLIST "$MYSRCDIR/$SPECFILE" $ADDITIONAL_PACKS
 	    echo "$* ..."
 	    "$@" || cleanup_and_exit 1
 	    check_exit
@@ -1813,7 +1821,7 @@ for SPECFILE in "${SPECFILES[@]}" ; do
 	echo "BUILD_INCARNATION=$INCARNATION" > $BUILD_ROOT/.buildenv
 	CREATE_BUILD_BINARIES=
 	egrep '^#[       ]*needsbinariesforbuild[       ]*$' >/dev/null <$MYSRCDIR/$SPECFILE && CREATE_BUILD_BINARIES=--create-build-binaries
-	set -- init_buildsystem --cachedir "$CACHE_DIR" "${definesnstuff[@]}" "${repos[@]}" $CLEAN_BUILD $USEUSEDFORBUILD $CREATE_BUILD_BINARIES $RPMLIST "$MYSRCDIR/$SPECFILE" $ADDITIONAL_PACKS
+	set -- init_buildsystem --cachedir "$CACHE_DIR" "${definesnstuff[@]}" "${repos[@]}" $CLEAN_BUILD $USE_SYSTEM_QEMU $USEUSEDFORBUILD $CREATE_BUILD_BINARIES $RPMLIST "$MYSRCDIR/$SPECFILE" $ADDITIONAL_PACKS
 	echo "$* ..."
 	"$@" || cleanup_and_exit 1
 	check_exit
