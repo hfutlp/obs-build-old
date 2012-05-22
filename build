@@ -754,6 +754,7 @@ setup_sys_root()
 			fi
 			BUILD_ROOT=$BUILD_ROOT/$SYSROOT_PATH CROSSBUILD=$CROSSBUILD init_buildsystem --rpmlist $SYSROOT_RPMS "$MYSRCDIR/$SPECFILE"
 			ERR=$?
+			setup_user $BUILD_ROOT/$SYSROOT_PATH
 		fi
     		#TODO: make proper error handling
 
@@ -813,6 +814,58 @@ check_for_ppc()
 		exit 1
 	    fi
    fi
+}
+
+setup_user()
+{
+    echo "Setting up build user information in $1"
+    mkdir -p $1/etc/
+    if test $BUILD_USER = abuild ; then
+	if ! egrep '^abuild:' >/dev/null <$1/etc/passwd ; then
+	    echo "abuild:x:${ABUILD_UID}:${ABUILD_GID}:Autobuild:/home/abuild:/bin/bash" >>$1/etc/passwd
+	    echo 'abuild:*:::::::' >>$1/etc/shadow # This is needed on Mandriva 2009
+	    echo 'abuild:*::' >>$1/etc/gshadow # This is needed on Ubuntu
+	    echo "abuild:x:${ABUILD_GID}:" >>$1/etc/group
+	    mkdir -p $1/home/abuild
+	    chown "$ABUILD_UID:$ABUILD_GID" $1/home/abuild
+	else
+	    if ! egrep "^abuild:x?:${ABUILD_UID}:${ABUILD_GID}" >/dev/null <$1/etc/passwd ; then
+		echo "abuild user present in the buildroot ($1) but uid:gid does not match"
+		echo "buildroot currently using:"
+		egrep "^abuild:" <$1/etc/passwd
+		echo "build script attempting to use:"
+		echo "abuild::${ABUILD_UID}:${ABUILD_GID}:..."
+		echo "build aborting"
+		cleanup_and_exit 1
+	    fi
+	fi
+	if test -f $1/etc/shadow ; then
+	    sed -e "s@^root::@root:*:@" < $1/etc/shadow > $1/etc/shadow.t && mv $1/etc/shadow.t $1/etc/shadow
+	fi
+	if test -f $1/etc/gshadow ; then
+	    sed -e "s@^root::@root:*:@" < $1/etc/gshadow > $1/etc/gshadow.t && mv $1/etc/gshadow.t $1/etc/gshadow
+	fi
+	BUILD_USER_ABUILD_USED=true
+    else
+	# building as root
+	ABUILD_UID=0
+	ABUILD_GID=0
+	if egrep '^abuild:' >/dev/null <$1/etc/passwd ; then
+	    rm -rf $1/home/abuild
+	    egrep -v '^abuild:' <$1/etc/passwd >$1/etc/passwd.new
+	    mv $1/etc/passwd.new $1/etc/passwd
+	    egrep -v '^abuild:' <$1/etc/group >$1/etc/group.new
+	    mv $1/etc/group.new $1/etc/group
+	    if test -f $1/etc/shadow ; then
+	      egrep -v '^abuild:' <$1/etc/shadow >$1/etc/shadow.new
+	      mv $1/etc/shadow.new $1/etc/shadow
+	    fi
+	    if test -f $1/etc/gshadow ; then
+	      egrep -v '^abuild:' <$1/etc/gshadow >$1/etc/gshadow.new
+	      mv $1/etc/gshadow.new $1/etc/gshadow
+	    fi
+	fi
+    fi
 }
 
 #### main ####
@@ -1900,53 +1953,8 @@ for SPECFILE in "${SPECFILES[@]}" ; do
     fi
     test -n "$NOROOTFORBUILD" && BUILD_USER=abuild
 
-    if test $BUILD_USER = abuild ; then
-	if ! egrep '^abuild:' >/dev/null <$BUILD_ROOT/etc/passwd ; then
-	    echo "abuild:x:${ABUILD_UID}:${ABUILD_GID}:Autobuild:/home/abuild:/bin/bash" >>$BUILD_ROOT/etc/passwd
-	    echo 'abuild:*:::::::' >>$BUILD_ROOT/etc/shadow # This is needed on Mandriva 2009
-	    echo 'abuild:*::' >>$BUILD_ROOT/etc/gshadow # This is needed on Ubuntu
-	    echo "abuild:x:${ABUILD_GID}:" >>$BUILD_ROOT/etc/group
-	    mkdir -p $BUILD_ROOT/home/abuild
-	    chown "$ABUILD_UID:$ABUILD_GID" $BUILD_ROOT/home/abuild
-	else
-	    if ! egrep "^abuild:x?:${ABUILD_UID}:${ABUILD_GID}" >/dev/null <$BUILD_ROOT/etc/passwd ; then
-		echo "abuild user present in the buildroot ($BUILD_ROOT) but uid:gid does not match"
-		echo "buildroot currently using:"
-		egrep "^abuild:" <$BUILD_ROOT/etc/passwd
-		echo "build script attempting to use:"
-		echo "abuild::${ABUILD_UID}:${ABUILD_GID}:..."
-		echo "build aborting"
-		cleanup_and_exit 1
-	    fi
-	fi
-	if test -f $BUILD_ROOT/etc/shadow ; then
-	    sed -e "s@^root::@root:*:@" < $BUILD_ROOT/etc/shadow > $BUILD_ROOT/etc/shadow.t && mv $BUILD_ROOT/etc/shadow.t $BUILD_ROOT/etc/shadow
-	fi
-	if test -f $BUILD_ROOT/etc/gshadow ; then
-	    sed -e "s@^root::@root:*:@" < $BUILD_ROOT/etc/gshadow > $BUILD_ROOT/etc/gshadow.t && mv $BUILD_ROOT/etc/gshadow.t $BUILD_ROOT/etc/gshadow
-	fi
-	BUILD_USER_ABUILD_USED=true
-    else
-	# building as root
-	ABUILD_UID=0
-	ABUILD_GID=0
-	if egrep '^abuild:' >/dev/null <$BUILD_ROOT/etc/passwd ; then
-	    rm -rf $BUILD_ROOT/home/abuild
-	    egrep -v '^abuild:' <$BUILD_ROOT/etc/passwd >$BUILD_ROOT/etc/passwd.new
-	    mv $BUILD_ROOT/etc/passwd.new $BUILD_ROOT/etc/passwd
-	    egrep -v '^abuild:' <$BUILD_ROOT/etc/group >$BUILD_ROOT/etc/group.new
-	    mv $BUILD_ROOT/etc/group.new $BUILD_ROOT/etc/group
-	    if test -f $BUILD_ROOT/etc/shadow ; then
-	      egrep -v '^abuild:' <$BUILD_ROOT/etc/shadow >$BUILD_ROOT/etc/shadow.new
-	      mv $BUILD_ROOT/etc/shadow.new $BUILD_ROOT/etc/shadow
-	    fi
-	    if test -f $BUILD_ROOT/etc/gshadow ; then
-	      egrep -v '^abuild:' <$BUILD_ROOT/etc/gshadow >$BUILD_ROOT/etc/gshadow.new
-	      mv $BUILD_ROOT/etc/gshadow.new $BUILD_ROOT/etc/gshadow
-	    fi
-	fi
-    fi
-
+    setup_user $BUILD_ROOT
+    
     # setup sys-root environment for cross compiling builds
     setup_sys_root
 
