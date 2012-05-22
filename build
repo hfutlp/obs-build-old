@@ -868,6 +868,17 @@ setup_user()
     fi
 }
 
+chroot_user_wrapper_default()
+{
+	chroot $BUILD_ROOT su -c "$1" - $BUILD_USER
+}
+
+chroot_user_wrapper_sb2()
+{
+	# We can assume we're in $BUILD_ROOT
+	su -c "sb2 -t obsbuild $1" - $BUILD_USER
+}
+
 #### main ####
 
 trap fail_exit EXIT
@@ -1964,10 +1975,17 @@ for SPECFILE in "${SPECFILES[@]}" ; do
                 # required for rpmbuild with --root parameter
                 mkdir -p $BUILD_ROOT/$SYSROOT_TARGET/var/tmp
                 chmod 1777 $BUILD_ROOT/$SYSROOT_TARGET/var/tmp
-
-		TOPDIR=`chroot $BUILD_ROOT su -c "rpm --root /$SYSROOT_TARGET --eval '%_topdir'" - $BUILD_USER`
+                if [ -z "$BUILD_SB2FLAGS" ]; then
+                        CHROOTUSERWRAPPER="chroot_user_wrapper_default"
+                        TOPDIR=`$CHROTOUSERWRAPPER "rpm --root /$SYSROOT_TARGET --eval '%_topdir'"`
+                else
+                        CHROOTUSERWRAPPER="chroot_user_wrapper_sb2"
+                        TOPDIR=`$CHROOTUSERWRAPPER "rpm --eval '%_topdir'"`
+                fi
 	else
-		TOPDIR=`chroot $BUILD_ROOT su -c "rpm --eval '%_topdir'" - $BUILD_USER`
+		CHROOTUSERWRAPPER="chroot_user_wrapper_default"
+		TOPDIR=`$CHROOTUSERWRAPPER "rpm --eval '%_topdir'"`
+		
 	fi
 	if test -z "$TOPDIR"; then
 	    echo "Error: TOPDIR empty"
@@ -1976,8 +1994,11 @@ for SPECFILE in "${SPECFILES[@]}" ; do
     else
 	TOPDIR=/usr/src/packages
 	mkdir -p $BUILD_ROOT$TOPDIR
+	CHROOTUSERWRAPPER="chroot_user_wrapper_default"
     fi
+    
 
+    echo TOPDIR is $TOPDIR
     rm -f $BUILD_ROOT/.build.packages
     ln -s ${TOPDIR#/} $BUILD_ROOT/.build.packages
 
@@ -2063,7 +2084,7 @@ for SPECFILE in "${SPECFILES[@]}" ; do
 	if test $BUILD_USER = abuild; then
 		cp -p $BUILD_ROOT/root/.rpmmacros $BUILD_ROOT/home/abuild/.rpmmacros
 
-		if [ -n "$CROSSBUILD" ]; then
+		if [ -n "$CROSSBUILD" -a -z "$BUILD_SB2FLAGS" ]; then
 			# required due to rpmbuild --root $SYSROOT_TARGET
 			RELA_PATH=$( abs2rela_path $BUILD_ROOT/$SYSROOT_TARGET/home/abuild $BUILD_ROOT/home/abuild )
 			mkdir -p $BUILD_ROOT/$SYSROOT_TARGET/home
@@ -2112,11 +2133,12 @@ for SPECFILE in "${SPECFILES[@]}" ; do
 	    for DEB_DSCFILE in $BUILD_ROOT/$DEB_SOURCEDIR/*.dsc ; do : ; done
 	    DEB_DSCFILE="${DEB_DSCFILE##*/}"
 	fi
-	chroot $BUILD_ROOT su -c "dpkg-source -x $DEB_SOURCEDIR/$DEB_DSCFILE $TOPDIR/BUILD" - $BUILD_USER
+	$CHROOTUSERWRAPPER "dpkg-source -x $DEB_SOURCEDIR/$DEB_DSCFILE $TOPDIR/BUILD"
     fi
 
     if test "$BUILDTYPE" = arch ; then
 	echo "Preparing sources..."
+	# XXX FIXME for cross
 	chroot $BUILD_ROOT su -c "cd $TOPDIR/SOURCES && makepkg -s -o 2>&1 >/dev/null" - $BUILD_USER
 	mv $BUILD_ROOT/$TOPDIR/SOURCES/* -t $BUILD_ROOT/$TOPDIR/BUILD
     fi
@@ -2132,7 +2154,7 @@ for SPECFILE in "${SPECFILES[@]}" ; do
     fi
     echo -----------------------------------------------------------------
     echo -----------------------------------------------------------------
-    if [ -n "$RUNNING_IN_VM" ]; then
+    if [ -n "$RUNNING_IN_VM" -a x$VM_TYPE != "xsb2" ]; then
 	if [ -x /sbin/ip ]; then
 	    ip addr add 127.0.0.1/8 dev lo
 	    ip link set lo up
@@ -2208,7 +2230,7 @@ for SPECFILE in "${SPECFILES[@]}" ; do
 		rpmbopts[${#rpmbopts[@]}]='--define'
 		rpmbopts[${#rpmbopts[@]}]="RSYNCDONE 1"
 	fi
-	if [ -n "$CROSSBUILD" ] ; then
+	if [ -n "$CROSSBUILD" -a -z "$BUILD_SB2FLAGS" ] ; then
 		rpmbopts[${#rpmbopts[@]}]='--root'
 		rpmbopts[${#rpmbopts[@]}]="/$SYSROOT_TARGET"
 
@@ -2218,6 +2240,10 @@ for SPECFILE in "${SPECFILES[@]}" ; do
 
 	rpmbuild=rpmbuild
 
+        BUILD_COMMAND_LOCATION=$BUILD_ROOT
+        if [ -n "$BUILD_SB2FLAGS" ]; then
+            BUILD_COMMAND_LOCATION=$BUILD_ROOT/$SYSROOT_TARGET
+        fi
 	test -x $BUILD_ROOT/usr/bin/rpmbuild || rpmbuild=rpm
 	# su involves a shell which would require even more
 	# complicated quoting to bypass than this
@@ -2225,13 +2251,13 @@ for SPECFILE in "${SPECFILES[@]}" ; do
 		"${definesnstuff[@]}" \
 		"${rpmbopts[@]}" \
 		"$TOPDIR/SOURCES/$SPECFILE" \
-		> $BUILD_ROOT/.build.command
-	chmod 755 $BUILD_ROOT/.build.command
+		> $BUILD_COMMAND_LOCATION/.build.command
+	chmod 755 $BUILD_COMMAND_LOCATION/.build.command
 	check_exit
 	if test -n "$shell"; then
 	    chroot $BUILD_ROOT su -
 	else
-	    chroot $BUILD_ROOT su -c /.build.command - $BUILD_USER < /dev/null && BUILD_SUCCEEDED=true
+	    $CHROOTUSERWRAPPER /.build.command < /dev/null && BUILD_SUCCEEDED=true
 	fi
     fi
 
