@@ -1513,7 +1513,6 @@ if [ -z "$RUNNING_IN_VM" ]; then
     test -n "$BUILD_RPMS" && echo Using BUILD_RPMS=$BUILD_RPMS
     echo Using BUILD_ARCH=$BUILD_ARCH
     test -n "$VM_TYPE" && echo "Doing $VM_TYPE build${VM_IMAGE:+ in $VM_IMAGE}"
-    test -n "$CROSSBUILD" && echo "Doing crossbuild for $ABUILD_TARGET"
     echo
 fi
 
@@ -2090,13 +2089,15 @@ for SPECFILE in "${SPECFILES[@]}" ; do
 	# extract optflags from configuration
 	getoptflags --dist "$BUILD_DIST" --configdir "$BUILD_DIR/configs" --archpath "$BUILD_ARCH" ${BUILD_DEBUG:+--debug} > $BUILD_ROOT/root/.rpmrc
 	test $BUILD_USER = abuild && cp -p $BUILD_ROOT/root/.rpmrc $BUILD_ROOT/home/abuild/.rpmrc
-	if test -n "$CROSSBUILD" -a -z "$ABUILD_TARGET"; then
-	    ABUILD_TARGET="$BUILD_ARCH"
-	elif test -z "$ABUILD_TARGET"; then
+	if test -z "$ABUILD_TARGET"; then
 	    ABUILD_TARGET=$(getchangetarget --dist "$BUILD_DIST" --configdir "$BUILD_DIR/configs" --archpath "$BUILD_ARCH" )
 	    test -z "$ABUILD_TARGET" || echo "build target is $ABUILD_TARGET"
 	fi
     fi
+
+    test -n "$CROSSBUILD" && echo "Doing crossbuild on $BUILD_ARCH for $ABUILD_TARGET"
+
+
     if test -f $BUILD_ROOT/.spec.new ; then
 	if ! cmp -s $BUILD_ROOT$TOPDIR/SOURCES/$SPECFILE $BUILD_ROOT/.spec.new ; then
 	    echo -----------------------------------------------------------------
