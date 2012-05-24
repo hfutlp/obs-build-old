@@ -1972,7 +1972,7 @@ for SPECFILE in "${SPECFILES[@]}" ; do
                 chmod 1777 $BUILD_ROOT/$SYSROOT_TARGET/var/tmp
                 if [ -z "$BUILD_SB2FLAGS" ]; then
                         CHROOTUSERWRAPPER="chroot_user_wrapper_default"
-                        TOPDIR=`$CHROTOUSERWRAPPER "rpm --root /$SYSROOT_TARGET --eval '%_topdir'"`
+                        TOPDIR=`$CHROOTUSERWRAPPER "rpm --root /$SYSROOT_TARGET --eval '%_topdir'"`
                 else
                         CHROOTUSERWRAPPER="chroot_user_wrapper_sb2"
                         TOPDIR=`$CHROOTUSERWRAPPER "rpm --eval '%_topdir'"`
