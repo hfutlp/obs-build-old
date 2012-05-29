@@ -1995,7 +1995,6 @@ for SPECFILE in "${SPECFILES[@]}" ; do
     fi
     
 
-    echo TOPDIR is $TOPDIR
     rm -f $BUILD_ROOT/.build.packages
     ln -s ${TOPDIR#/} $BUILD_ROOT/.build.packages
 
