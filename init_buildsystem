@@ -89,12 +89,28 @@ PKGS=("$@")
 
 sb2rpmwrapper()
 {
-	su -c "cd $BUILD_ROOT; sb2 -t obsbuild -m obs-rpm-install -R rpm $*" abuild
+	if [ ! -e /home/abuild/sb2-session-initbuildsys ]; then
+		SESSION="-S /home/abuild/sb2-session-initbuildsys -t obsbuild"
+	else
+		SESSION="-J /home/abuild/sb2-session-initbuildsys"
+	fi
+	su -c "cd $BUILD_ROOT; sb2 $SESSION -m obs-rpm-install -R rpm $*" - abuild
 }
 
 sb2chrootwrapper()
 {
-	su -c "cd $BUILD_ROOT; sb2 -t obsbuild -m obs-rpm-install -R $*" abuild
+	if [ ! -e /home/abuild/sb2-session-initbuildsys ]; then
+		SESSION="-S /home/abuild/sb2-session-initbuildsys -t obsbuild"
+	else
+		SESSION="-J /home/abuild/sb2-session-initbuildsys"
+	fi
+	su -c "cd $BUILD_ROOT; sb2 $SESSION -m obs-rpm-install -R $*" - abuild
+}
+
+
+sb2cleanup()
+{
+	su -c "cd $BUILD_ROOT; sb2 -D /home/abuild/sb2-session-initbuildsys" - abuild
 }
 
 # Case: we're doing cross build but we're not preparing a VM
@@ -103,18 +119,22 @@ if [ -n "$CROSSBUILD" -a -z "$PREPARE_VM" ]; then
 		# We assume SB2 user has already been set up for us at this point
 		CHROOT="sb2chrootwrapper "
 		CALLRPM="sb2rpmwrapper " 
+		CLEANUP_CROSSBUILD="sb2cleanup "
 	else
 		CHROOT="chroot $BUILD_ROOT"
 		CALLRPM="rpm --root $BUILD_ROOT"
+		CLEANUP_CROSSBUILD=""
 	fi
 # Case: we're doing cross build and preparing a VM
 elif [ -n "$CROSSBUILD" -a -n "$PREPARE_VM" ]; then
 	CHROOT="echo CHROOT:"
 	CALLRPM="echo CALLRPM:"
+	CLEANUP_CROSSBUILD=""
 # Case: business as usual
 else
 	CHROOT="chroot $BUILD_ROOT"
 	CALLRPM="chroot $BUILD_ROOT rpm"
+	CLEANUP_CROSSBUILD=""
 fi
 
 #
@@ -123,6 +143,7 @@ fi
 
 cleanup_and_exit()
 {
+    $CLEANUP_CROSSBUILD
     trap EXIT
     [ "$BUILD_ROOT" != / ] || chown $browner $BUILD_ROOT
     # umount so init_buildsystem can be used standalone

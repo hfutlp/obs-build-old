@@ -874,8 +874,14 @@ chroot_user_wrapper_default()
 
 chroot_user_wrapper_sb2()
 {
+	if [ ! -e /home/abuild/sb2-session-build ]; then
+		SESSION="-S /home/abuild/sb2-session-build -t obsbuild"
+	else
+		SESSION="-J /home/abuild/sb2-session-build"
+	fi
+
 	# We can assume we're in $BUILD_ROOT
-	su -c "sb2 -t obsbuild $1" - $BUILD_USER
+	su -c "sb2 $SESSION $1" - $BUILD_USER
 }
 
 #### main ####
