@@ -310,6 +310,13 @@ cleanup_and_exit () {
     trap EXIT
     test -z "$1" && set 0
     rm -f $BUILD_ROOT/exit
+    
+    if test -n "$BUILD_SB2FLAGS"; then
+    	if [ -e /home/abuild/sb2-session-build ]; then
+	    	su -c "sb2 -D /home/abuild/sb2-session-build" - $BUILD_USER
+	fi
+    fi
+    
     if test "$1" -eq 1 -a -x /bin/df ; then
         # okay, it failed, but maybe because disk space?
 	if df $BUILD_ROOT 2>/dev/null | grep -q "100%"; then
@@ -750,6 +757,8 @@ setup_sys_root()
 				chroot $BUILD_ROOT chown -R $BUILD_USER $SYSROOT_PATH 
 				# Set up the target in SB2
 				chroot $BUILD_ROOT su -c "cd $SYSROOT_PATH; /usr/bin/sb2-init -C --sysroot=/ -L --sysroot=/ -m obs-rpm-build -c /usr/bin/qemu-arm-dynamic -n -N -t / obsbuild /opt/cross/bin/armv7l-meego-linux-gnueabi-gcc" $BUILD_USER
+				
+				
 			fi
 			BUILD_ROOT=$BUILD_ROOT/$SYSROOT_PATH CROSSBUILD=$CROSSBUILD init_buildsystem --rpmlist $SYSROOT_RPMS "$MYSRCDIR/$SPECFILE"
 			ERR=$?
